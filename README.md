@@ -17,7 +17,12 @@ Params:
    item_name: str
    server_name: str
    
+![](./screenshots/getprice.png)
+
 ### /GetPriceGraph
 Params: 
    item_name: str
    server_name: str
+   
+![](./screenshots/getpricegraph.png)
+![](./screenshots/getpricegraph_large.png)
