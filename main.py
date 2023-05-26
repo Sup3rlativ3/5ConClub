@@ -63,6 +63,44 @@ async def on_ready():
     except Exception as e:
         logging.exception(e)
     
+@bot.tree.command(name="outofdate")
+async def outofdate(interaction: discord.Interaction):
+    # Creating an embed object
+    embed = discord.Embed(
+        title="Information out of date?",
+        url="https://nwmarketprices.com/",
+        description=r"""If your server information is out of date it means that there isn't someone activly updating the information.
+
+You can help by becoming a market watcher for nwmarketprices.com.
+
+**Why would you want to be a Market Watcher?**
+
+- You are awesome and want to help your fellow players get access to price tracking data which will also feed other addons like pricing overlays, and crafting calculators.
+
+- You will get access to a custom dashboard to track your sold items and other reports
+
+- As the first person to see the data after it posts you will be in a position to potentially take advantage of favorable market conditions
+
+The scanner currently works with the following resolutions:
+1920x1080, 2560x1080, 2560x1440, 3840x2160
+
+Join the discord server for [NW Market Prices](https://discord.gg/HE7TDf7uxr)""",
+        color=0x27ae60,
+    )
+
+    # Adding an image to the embed object
+    embed.set_thumbnail(url="https://nwmarketprices.com/static/images/cropped-logo4-60.png")
+
+    # Adding the data to the embed
+    embed.add_field(name="Step 1",value="Go to https://nwmarketprices.com/ and click the Sign In button on the top.",inline=False)
+    embed.add_field(name="Step 2",value="Click on your user name on the top right and select Settings",inline=False)
+    embed.add_field(name="Step 3",value="Create your scanner password under the Scanner Settings section",inline=False)
+    embed.add_field(name="Step 4",value="Go to the become-a-scanner channel in the nwmarketprices.com discord https://discord.com/channels/936405548792938546/1050238181125148863/1050266848811286598",inline=False)
+    embed.add_field(name="Step 5",value="Choose your region and server from the dropdown option and the bot will automatically grant you the correct roles.",inline=False)
+    
+    # Sending the embed object in the response
+    await interaction.response.send_message(embed=embed)
+
 
 @tasks.loop(minutes=15)
 async def update_data():
@@ -133,7 +171,7 @@ async def getprice(interaction: discord.Interaction, item_name: str, server_name
     embed = discord.Embed(
         title=f"{item_data['ItemName']} - {server_name} Price Data",
         url=f"https://nwmarketprices.com/{item_data['ItemId']}/{server_id}",
-        color=0x3498db,
+        color=0x27ae60,
         
     )
 
@@ -232,7 +270,7 @@ async def getpricegraph(interaction: discord.Interaction, item_name: str, server
     embed = discord.Embed(
         title=f"{item_name} - {server_name} Price Trend",
         url=f"https://nwmarketprices.com/{item_id}/{server_id}",
-        color=0x3498db,
+        color=0x27ae60,
     )
     embed.set_image(url='attachment://graph.png')
     # Set the timestamp for last update for the embed
