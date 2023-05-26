@@ -37,9 +37,9 @@ python3 main.py
 ## Running in a Docker container
 
 ```bash
-docker build -t 5ConClub .
+docker build -t 5conclub .
 ```
 
 ```bash
-docker run -d 5ConClub
+docker run -d 5conclub
 ```
