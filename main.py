@@ -304,7 +304,6 @@ async def getpricegraph(interaction: discord.Interaction, item_name: str, server
     # Embed object
     embed = discord.Embed(
         title=f"{item_name.title()} - {server_name.title()} Price Trend",
-        description=f"Darkmode {dark_mode}",
         url=f"https://nwmarketprices.com/{item_id}/{server_id}",
         color=0x27ae60,
     )
