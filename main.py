@@ -7,7 +7,12 @@ import matplotlib.pyplot as plt
 from io import BytesIO
 import json
 import logging
+from fuzzywuzzy import process
+from dotenv import load_dotenv
+import os
+from typing import Optional
 
+load_dotenv()
 logging.basicConfig(level=logging.INFO)
 
 # Discord client
@@ -38,6 +43,38 @@ SERVER_MAPPING = {
 server_data = {}
 server_last_updated = {}
 
+outofdate_embed = discord.Embed(
+        title="Information out of date?",
+        url="https://nwmarketprices.com/",
+        description=r"""If your server information is out of date it means that there isn't someone activly updating the information.
+
+You can help by becoming a market watcher for nwmarketprices.com.
+
+**Why would you want to be a Market Watcher?**
+
+- You are awesome and want to help your fellow players get access to price tracking data which will also feed other addons like pricing overlays, and crafting calculators.
+
+- You will get access to a custom dashboard to track your sold items and other reports
+
+- As the first person to see the data after it posts you will be in a position to potentially take advantage of favorable market conditions
+
+The scanner currently works with the following resolutions:
+1920x1080, 2560x1080, 2560x1440, 3840x2160
+
+Join the discord server for [NW Market Prices](https://discord.gg/HE7TDf7uxr)""",
+        color=0x27ae60,
+    )
+
+# Adding an image to the embed object
+outofdate_embed.set_thumbnail(url="https://nwmarketprices.com/static/images/cropped-logo4-60.png")
+
+# Adding the data to the embed
+outofdate_embed.add_field(name="Step 1",value="Go to https://nwmarketprices.com/ and click the Sign In button on the top.",inline=False)
+outofdate_embed.add_field(name="Step 2",value="Click on your user name on the top right and select Settings",inline=False)
+outofdate_embed.add_field(name="Step 3",value="Create your scanner password under the Scanner Settings section",inline=False)
+outofdate_embed.add_field(name="Step 4",value="Go to the become-a-scanner channel in the nwmarketprices.com discord https://discord.com/channels/936405548792938546/1050238181125148863/1050266848811286598",inline=False)
+outofdate_embed.add_field(name="Step 5",value="Choose your region and server from the dropdown option and the bot will automatically grant you the correct roles.",inline=False)
+
 # Load the item list
 with open('item_list.json', 'r') as f:
     ITEM_LIST = json.load(f)
@@ -62,44 +99,6 @@ async def on_ready():
         update_data.start()
     except Exception as e:
         logging.exception(e)
-    
-@bot.tree.command(name="outofdate")
-async def outofdate(interaction: discord.Interaction):
-    # Creating an embed object
-    embed = discord.Embed(
-        title="Information out of date?",
-        url="https://nwmarketprices.com/",
-        description=r"""If your server information is out of date it means that there isn't someone activly updating the information.
-
-You can help by becoming a market watcher for nwmarketprices.com.
-
-**Why would you want to be a Market Watcher?**
-
-- You are awesome and want to help your fellow players get access to price tracking data which will also feed other addons like pricing overlays, and crafting calculators.
-
-- You will get access to a custom dashboard to track your sold items and other reports
-
-- As the first person to see the data after it posts you will be in a position to potentially take advantage of favorable market conditions
-
-The scanner currently works with the following resolutions:
-1920x1080, 2560x1080, 2560x1440, 3840x2160
-
-Join the discord server for [NW Market Prices](https://discord.gg/HE7TDf7uxr)""",
-        color=0x27ae60,
-    )
-
-    # Adding an image to the embed object
-    embed.set_thumbnail(url="https://nwmarketprices.com/static/images/cropped-logo4-60.png")
-
-    # Adding the data to the embed
-    embed.add_field(name="Step 1",value="Go to https://nwmarketprices.com/ and click the Sign In button on the top.",inline=False)
-    embed.add_field(name="Step 2",value="Click on your user name on the top right and select Settings",inline=False)
-    embed.add_field(name="Step 3",value="Create your scanner password under the Scanner Settings section",inline=False)
-    embed.add_field(name="Step 4",value="Go to the become-a-scanner channel in the nwmarketprices.com discord https://discord.com/channels/936405548792938546/1050238181125148863/1050266848811286598",inline=False)
-    embed.add_field(name="Step 5",value="Choose your region and server from the dropdown option and the bot will automatically grant you the correct roles.",inline=False)
-    
-    # Sending the embed object in the response
-    await interaction.response.send_message(embed=embed)
 
 
 @tasks.loop(minutes=15)
@@ -120,6 +119,7 @@ async def update_data():
             if server_id not in server_last_updated or server_last_updated[server_id] < server_updated_time:
                 server_last_updated[server_id] = server_updated_time
                 server_data[server_id] = await fetch_server_data(session, server_id, server_name)
+
 
 async def fetch_server_data(session, server_id, server_name, retries=3):
     logging.info(f"Grabbing the latest prices for {server_name} ({server_id})")
@@ -144,32 +144,39 @@ async def getprice(interaction: discord.Interaction, item_name: str, server_name
     The command /getprice <item_name> <server_name>
     This command fetches the price data of the item from a specific server
     """
-    server_id = SERVER_MAPPING.get(server_name.lower())
-    if server_id is None:
-        await interaction.response.send_message("Invalid server name.")
+    # Fuzzy matching for server_name
+    server_name_match = process.extractOne(server_name.lower(), SERVER_MAPPING.keys())
+    if server_name_match is None:
+        await interaction.response.send_message("Invalid server name.", ephemeral=True)
         return
 
+    server_name, _ = server_name_match
+    server_id = SERVER_MAPPING[server_name]
+
     if server_id not in server_data:
-        await interaction.response.send_message("Data for this server is not available yet.")
+        await interaction.response.send_message("Data for this server is not available yet.", ephemeral=True)
         return
 
     data = server_data[server_id]
 
     if data is None:
-        await interaction.response.send_message("Data for this server is not available yet.")
+        await interaction.response.send_message("Data for this server is not available yet.", ephemeral=True)
         return
+    
+    # fuzzy matching
+    item_name = process.extractOne(item_name, ITEM_LIST.keys())[0]
 
     for item in data:
         if item['ItemName'].lower() == item_name.lower():
             item_data = item
             break
     else:
-        await interaction.response.send_message("Item not found.")
+        await interaction.response.send_message("Item not found.", ephemeral=True)
         return
 
     # Creating an embed object
     embed = discord.Embed(
-        title=f"{item_data['ItemName']} - {server_name} Price Data",
+        title=f"{item_data['ItemName']} - {server_name.title()} Price Data",
         url=f"https://nwmarketprices.com/{item_data['ItemId']}/{server_id}",
         color=0x27ae60,
         
@@ -191,18 +198,46 @@ async def getprice(interaction: discord.Interaction, item_name: str, server_name
     embed.timestamp = last_updated
     embed.set_footer(text=f"Made possible by nwmarketprices.com",icon_url="https://nwmarketprices.com/static/images/cropped-logo4-60.png")
     
+    button = discord.ui.Button(label="Info out of date?", style=discord.ButtonStyle.green)
+
+    async def btn_callback(interaction):
+        await interaction.response.send_message(embed=outofdate_embed, ephemeral=True)
+    
+    view = discord.ui.View()
+    view.add_item(button)
+
+    button.callback = btn_callback
+
 
     # Sending the embed object in the response
-    await interaction.response.send_message(embed=embed)
+    await interaction.response.send_message(embed=embed, view=view)
 
 
 @bot.tree.command(name="getpricegraph")
-async def getpricegraph(interaction: discord.Interaction, item_name: str, server_name: str):
-    server_id = SERVER_MAPPING.get(server_name.lower())
-    if server_id is None:
-        await interaction.response.send_message("Invalid server name.")
+async def getpricegraph(interaction: discord.Interaction, item_name: str, server_name: str, dark_mode: Optional[bool]=False):
+    """
+    The command /getpricegraph <item_name> <server_name> <dark_mode>
+    This command fetches the price data of the item from a specific server over time and displays it as a graph.
+    """
+
+    plt.rcdefaults()
+    if dark_mode == True:
+        plt.style.use('./pitayasmoothie-dark.mplstyle')
+    elif dark_mode == False:
+        plt.style.use('seaborn-v0_8-white')
+    else:
+        plt.style.use('seaborn-v0_8-white')
+
+    # Fuzzy matching for server_name
+    server_name_match = process.extractOne(server_name.lower(), SERVER_MAPPING.keys())
+    if server_name_match is None:
+        await interaction.response.send_message("Invalid server name.", ephemeral=True)
         return
 
+    server_name, _ = server_name_match
+    server_id = SERVER_MAPPING[server_name]
+
+    item_name = process.extractOne(item_name, ITEM_LIST.keys(),score_cutoff=50)[0]
     item_name = item_name.lower()
     item = None
     for name, value in ITEM_LIST.items():
@@ -211,7 +246,7 @@ async def getpricegraph(interaction: discord.Interaction, item_name: str, server
             break
 
     if item is None:
-        await interaction.response.send_message("Item not found.")
+        await interaction.response.send_message("Item not found.", ephemeral=True)
         return
 
     item_id = item['name_id']
@@ -231,20 +266,20 @@ async def getpricegraph(interaction: discord.Interaction, item_name: str, server
     highest_buy_order = [x['highest_buy_order'] for x in graph_data['price_graph_data']]
     availability = [x['avail'] for x in graph_data['price_graph_data']]
 
-    fig, ax1 = plt.subplots(figsize=(10,5)) # Set the figure size
+    fig, ax1 = plt.subplots(figsize=(15,7)) # Set the figure size
 
     # Add lines
-    ax1.plot(dates, avg_prices, color='b', label='Average Price')
-    ax1.plot(dates, rolling_avg, color='b', linestyle='dotted', label='Rolling Average')
-    ax1.plot(dates, lowest_prices, color='g', label='Lowest Price')
-    ax1.plot(dates, highest_buy_order, color='orange', label='Highest Buy Order')
+    ax1.plot(dates, avg_prices, label='Average Price')
+    ax1.plot(dates, rolling_avg, linestyle='dotted', label='Rolling Average')
+    ax1.plot(dates, lowest_prices, label='Lowest Price')
+    ax1.plot(dates, highest_buy_order, label='Highest Buy Order')
 
     ax1.set_xlabel('Date')
     ax1.set_ylabel('Price')
 
     # Availability (secondary y-axis)
     ax2 = ax1.twinx()
-    ax2.bar(dates, availability, alpha=0.2, color='grey', label='Availability')
+    ax2.bar(dates, availability, alpha=0.2, label='Availability')
     ax2.set_ylabel('Availability')
 
     # Format the date in x-axis
@@ -253,9 +288,9 @@ async def getpricegraph(interaction: discord.Interaction, item_name: str, server
     # Legend
     lines, labels = ax1.get_legend_handles_labels()
     bars, labels_bars = ax2.get_legend_handles_labels()
-    ax2.legend(lines + bars, labels + labels_bars, loc='upper center', bbox_to_anchor=(0.5, -0.15), fancybox=True, shadow=True, ncol=5)
-
-    plt.title(f'Price Trend for {item_name} in {server_name}')
+    ax2.legend(lines + bars, labels + labels_bars, loc='upper center', bbox_to_anchor=(0.5, -0.25), fancybox=True, shadow=True, ncol=5)
+        
+    plt.title(f'Price Trend for {item_name.title()} in {server_name.title()}')
 
     # Convert plot to PNG image
     buf = BytesIO()
@@ -268,7 +303,8 @@ async def getpricegraph(interaction: discord.Interaction, item_name: str, server
 
     # Embed object
     embed = discord.Embed(
-        title=f"{item_name} - {server_name} Price Trend",
+        title=f"{item_name.title()} - {server_name.title()} Price Trend",
+        description=f"Darkmode {dark_mode}",
         url=f"https://nwmarketprices.com/{item_id}/{server_id}",
         color=0x27ae60,
     )
@@ -279,9 +315,24 @@ async def getpricegraph(interaction: discord.Interaction, item_name: str, server
     embed.timestamp = last_updated
     embed.set_footer(text=f"Made possible by nwmarketprices.com",icon_url="https://nwmarketprices.com/static/images/cropped-logo4-60.png")
 
-    #embed.set_footer(text=f"Last Updated: {graph_data['last_checked']}")
+    button = discord.ui.Button(label="Info out of date?", style=discord.ButtonStyle.green)
 
-    await interaction.response.send_message(file=file, embed=embed)
+    async def btn_callback(interaction):
+        await interaction.response.send_message(embed=outofdate_embed, ephemeral=True)
+    
+    view = discord.ui.View()
+    view.add_item(button)
+
+    button.callback = btn_callback
+
+    await interaction.response.send_message(file=file, embed=embed, view=view)
+
+@bot.tree.command(name="outofdate")
+async def outofdate(interaction: discord.Interaction):
+    
+    # Sending the embed object in the response
+    await interaction.response.send_message(embed=outofdate_embed, ephemeral=True)
+
 
 # Replace 'your-bot-token' with your bot's token
-bot.run('TOKEN_GOES_HERE')
+bot.run(os.getenv('PROD_TOKEN'))
