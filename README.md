@@ -105,7 +105,7 @@ An array of server names seperated by a comma. Fuzzy matching applies meaning yo
 ```yaml
 Type: Array[String]
 Required: True
-Position: 2
+Position: 1
 Default value: N/A
 ```
 
