@@ -1,7 +1,7 @@
 import discord
 from discord.ext import tasks, commands
 import aiohttp
-from datetime import datetime
+from datetime import datetime, timedelta
 import asyncio
 import matplotlib.pyplot as plt
 from io import BytesIO
@@ -11,6 +11,7 @@ from fuzzywuzzy import process
 from dotenv import load_dotenv
 import os
 from typing import Optional
+import requests
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
@@ -78,6 +79,102 @@ outofdate_embed.add_field(name="Step 5",value="Choose your region and server fro
 # Load the item list
 with open('item_list.json', 'r') as f:
     ITEM_LIST = json.load(f)
+
+@bot.tree.command(name="getserverpop")
+async def getserverpop(interaction: discord.Interaction, server_names: str = '', stat_type: str = 'mean', dark_mode: Optional[bool]=False):
+    """
+    Discord bot command to fetch server population stats from NWDB and plot a line graph for multiple servers.
+    """
+
+    plt.rcdefaults()
+    if dark_mode == True:
+        plt.style.use('./pitayasmoothie-dark.mplstyle')
+    elif dark_mode == False:
+        plt.style.use('seaborn-v0_8-white')
+    else:
+        plt.style.use('seaborn-v0_8-white')
+
+    # Split the server names string into a list of server names
+    server_names = server_names.split(',')
+
+    # Validate stat_type
+    if stat_type not in ['min', 'max', 'mean', 'last']:
+        await interaction.response.send_message('Invalid stat type. Please choose from "min", "max", "mean", or "last".')
+        return
+
+    url = "https://nwdb.info/server-status/servers_24h.json"
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
+    }
+    response = requests.get(url, headers=headers)
+
+    if response.status_code != 200:
+        print(f"Unexpected status or Content-Type: {response.status_code}, {response.headers['Content-Type']}")
+        return
+
+    data = response.json()
+
+    # Iterate through servers and find the servers with the matching names
+    all_server_names = [server[4] for server in data['data']['servers']]
+
+    not_found_servers = []
+    server_data = []
+    my_server_names = []
+    for server_name in server_names:
+        best_match = process.extractOne(server_name, all_server_names)
+        my_server_names.append(best_match[0])
+
+        if not best_match or best_match[1] < 80:  # You can adjust the matching score based on your requirements
+            not_found_servers.append(server_name)
+        else:
+            for server in data['data']['servers']:
+                if server[4] == best_match[0]:
+                    server_data.append((best_match[0], server[12][1][stat_type]))
+
+    if not_found_servers:
+        await interaction.response.send_message(f'Servers "{", ".join(not_found_servers)}" not found.')
+        return
+    
+    plt.figure(figsize=(12, 8))
+    my_server_names = ' , '.join(str(x) for x in my_server_names)
+
+    # Plot the graph for each server
+    for server_name, population_values in server_data:
+        plt.plot(range(len(population_values)), population_values, marker='o', label=server_name)
+
+    # Generate a list of labels for each hour from 24 hours ago to now
+    now = datetime.now()
+    labels = [(now - timedelta(hours=i)).strftime('%H:00') for i in range(24, -1, -1)]
+    plt.xticks(range(len(population_values)), labels, rotation='vertical')
+
+    plt.xlabel('Time (from 24 hours ago to now)')
+    plt.ylabel('Population')
+    plt.title(f'{my_server_names} {stat_type} server population for the previous 24h')
+    plt.legend()
+
+    # Save the figure to a BytesIO object
+    buf = BytesIO()
+    plt.savefig(buf, format='png')
+    buf.seek(0)
+    plt.clf()  # Clear the current figure
+
+    # Create a File object for discord
+    file = discord.File(buf, filename='server_population.png')
+
+    # Send the file in an embed
+    utc_now = datetime.utcnow()
+    embed = discord.Embed(
+        title=f'{my_server_names} server population {datetime.now().strftime("%Y-%m-%d")}',
+        timestamp = utc_now
+    )
+    embed.set_image(url='attachment://server_population.png')
+    embed.set_footer(text=f"Made possible by nwdb.info",icon_url="https://cdn.nwdb.info/static/images/brand/logo_transparent_48.png")
+    await interaction.response.send_message(file=file, embed=embed)
+    return
+
+
+
+
 
 @bot.event
 async def on_ready():
@@ -334,4 +431,4 @@ async def outofdate(interaction: discord.Interaction):
 
 
 # Replace 'your-bot-token' with your bot's token
-bot.run(os.getenv('PROD_TOKEN'))
+bot.run(os.getenv('DEV_TOKEN'))
