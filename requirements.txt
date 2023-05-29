@@ -3,3 +3,4 @@ aiohttp
 matplotlib
 fuzzywuzzy[speedup]
 python-dotenv
+requests
