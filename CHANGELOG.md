@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## Version 1.4.0 (2023/05/29)
+
+- Added the ``getserverpop`` command to get the population of servers.
+
 ## Version 1.3.2 (2023/05/28)
 
 - Added darkmode to the ``getpricegraph`` command, no more scalding your eyes.
